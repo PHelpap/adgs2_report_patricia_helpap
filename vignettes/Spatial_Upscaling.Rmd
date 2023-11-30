@@ -1,0 +1,207 @@
+---
+title: "Spatial Upscaling Exercise"
+author: "Patricia Helpap"
+date: "2023-11-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Setup: 
+Load the data directly from online source: 
+```{r}
+library(tidyverse)
+
+df <- readr::read_csv("https://raw.githubusercontent.com/stineb/leafnp_data/main/data/leafnp_tian_et_al.csv")
+```
+We will work with a limited subset of the variables available in the file, and with the data aggregated by sites (identified by their respective longitudes and latitudes):
+
+- leafN: leaf nitrogen content, in mass-based concentration units (gN/gDM)
+- lon: longitude in decimal degrees east
+- lat: latitude in decimal degrees north
+- elv: Elevation above sea level (m)
+- mat: mean annual temperature (degrees Celsius)
+- map: mean annual precipitation (mm/yr)
+- ndep: atmospheric nitrogen deposition (g/m^2 yr)
+- mai: mean annual daily irradiance (µmol/m^2 s)
+- Species: species name of the plant on which leaf N was measured
+```{r}
+common_species <- df |> 
+  group_by(Species) |> 
+  summarise(count = n()) |> 
+  arrange(desc(count)) |> 
+  slice(1:50) |> 
+  pull(Species)
+
+dfs <- df |> 
+  dplyr::select(leafN, lon, lat, elv, mat, map, ndep, mai, Species) |> 
+  filter(Species %in% common_species)
+  # group_by(lon, lat) |> 
+  # summarise(across(where(is.numeric), mean))
+
+# quick overview of data
+skimr::skim(dfs)
+```
+Show missing data: 
+```{r}
+# show missing data
+visdat::vis_miss(dfs)
+```
+
+
+---
+
+# Exercise results
+
+## 1.1 Literature - *Ludwig et al. 2023*
+
+- Explain the difference between random cross-validation and spatial cross-validation: 
+
+
+--- 
+
+- alternative to measuring distance for evaluation of spatial upscaling based on environmental covariates:
+Evaluate based on environmental covariates - e.g. statistical distance? 
+
+---
+
+## 1.2 Random cross validation
+
+Use Random Forest to perform a 5-fold cross-validation with the leaf N data (leafN) and the following predictors:
+
+- elv: Elevation above sea level (m)
+- mat: mean annual temperature (degrees Celsius)
+- map: mean annual precipitation (mm/yr)
+- ndep: atmospheric nitrogen deposition (g/m^2 yr)
+- mai: mean annual daily irradiance (µmol/m^2 s)
+- Species: species name of the plant on which leaf N was measured
+
+**Report the mean RMSE and R**
+ across cross-validation folds. Chose hyperparameters as mtry = 3 and min.node.size = 12 and others as their default in ranger::ranger().
+
+---
+ 
+## 1.3 Spatial cross-validation
+
+distribution of the data: 
+```{r}
+library(ggplot2)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+# get coast outline
+coast <- rnaturalearth::ne_coastline(scale = 110, returnclass = "sf")
+
+ggplot() +
+
+  # plot coastline
+  geom_sf(data = coast,
+          colour = 'black',
+          size = 0.2) +
+
+  # set extent in longitude and latitude
+  coord_sf(
+    ylim = c(-60, 80),
+    expand = FALSE) +  # to draw map strictly bounded by the specified extent
+  
+  # plot points on map
+  geom_point(data = dfs, aes(x = lon, y = lat), color = "red", size = 0.2) +
+  labs(x = "", y = "") +
+  theme(legend.position = "bottom")
+```
+1) Observations: the data is very heterogenously distributed around the globe with a strong bias on central Europe and another cluster of data in eastern Asia. Only a couple of datapoints are recorded for the Americas, Africa and Oceania, which will influence the model outcome. 
+
+2) Spatial cross-validation using k-means (k=5) and plotting it: 
+
+3) Distribution of leafN by cluster plot:
+
+4) Random forest model for the identified clusters:
+
+*Hint*: Using a pre-defined grouping for delineating the folds in k-fold cross-validation can be done by first determining the indexes of rows for each group (a list of vectors that contain the row indexes of the training data). This can be done by:
+```{r}
+# create folds based on clusters
+# # assuming 'df' contains the data and a column called 'cluster' containing the 
+# # result of the k-means clustering
+# group_folds_train <- purrr::map(
+#   seq(length(unique(df$cluster))),
+#   ~ {
+#     df |> 
+#       select(cluster) |> 
+#       mutate(idx = 1:n()) |> 
+#       filter(cluster != .) |> 
+#       pull(idx)
+#   }
+# )
+# 
+# group_folds_test <- purrr::map(
+#   seq(length(unique(df$cluster))),
+#   ~ {
+#     df |> 
+#       select(cluster) |> 
+#       mutate(idx = 1:n()) |> 
+#       filter(cluster == .) |> 
+#       pull(idx)
+#   }
+# )
+```
+Then, implement the custom cross-validation “by hand”. Code could look like this (But note that this is just for demo, and the code will not run without an error if you simply copy-and-paste. Complement in '...' with your code):
+```{r}
+# # create a function that trains a random forest model on a given set of rows and 
+# # predicts on a disjunct set of rows
+# train_test_by_fold <- function(df, idx_train, idx_val){
+#   
+#   mod <- ranger::ranger(
+#     x =  ...,  # data frame with columns corresponding to predictors
+#     y =  ...   # a vector of the target values (not a data frame!)
+#   )
+#   
+#   pred <- predict(...,       # the fitted model object 
+#                   data = ... # a data frame with columns corresponding to predictors
+#                   )
+# 
+#   rsq <- ...  # the R-squared determined on the validation set
+#   rmse <- ... # the root mean square error on the validation set
+#   
+#   return(tibble(rsq = rsq, rmse = rmse))
+# }
+# 
+# # apply function on each custom fold and collect validation results in a nice
+# # data frame
+# out <- purrr::map2_dfr(
+#   group_folds_train,
+#   group_folds_test,
+#   ~train_test_by_fold(.x, .y)
+# ) |> 
+#   mutate(test_fold = 1:5)
+```
+Expected result: 
+
+This is approximate because the k-means clustering contains a random element.
+```{r}
+# # A tibble: 5 × 3
+#      rsq  rmse test_fold
+#    <dbl> <dbl>     <int>
+# 1 0.0233  7.05         1
+# 2 0.492   4.04         2
+# 3 0.619   3.28         3
+# 4 0.511   3.07         4
+# 5 0.168   2.26         5
+```
+
+
+5) Result comparison and discussion:
+
+---
+
+## 2.4 Environmental Cross-Validation
+
+1) perform a custom cross-validation as above, but this time considering five clusters of points not in geographical space, but in environmental space - spanned by the mean annual precipitation and the mean annual temperature. Report the R-squared and the RMSE on the validation set of each of the five folds.
+
+2) Compare the results of the environmental cross-validation to the results of the random and the spatial cross-validation and discuss reasons for why you observe a difference in the cross-validation metrics (if you do).
+
+
+
+
