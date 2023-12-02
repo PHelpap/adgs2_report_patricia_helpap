@@ -11,8 +11,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Setup: 
 Load the data directly from online source: 
-```{r}
+```{r reading data}
 library(tidyverse)
+library(ggplot2)
+library(lattice)
+library(caret)
+library(recipes)
+library(ranger)
 
 df <- readr::read_csv("https://raw.githubusercontent.com/stineb/leafnp_data/main/data/leafnp_tian_et_al.csv")
 ```
@@ -27,7 +32,7 @@ We will work with a limited subset of the variables available in the file, and w
 - ndep: atmospheric nitrogen deposition (g/m^2 yr)
 - mai: mean annual daily irradiance (µmol/m^2 s)
 - Species: species name of the plant on which leaf N was measured
-```{r}
+```{r species data}
 common_species <- df |> 
   group_by(Species) |> 
   summarise(count = n()) |> 
@@ -45,7 +50,7 @@ dfs <- df |>
 skimr::skim(dfs)
 ```
 Show missing data: 
-```{r}
+```{r showing missing data}
 # show missing data
 visdat::vis_miss(dfs)
 ```
@@ -57,13 +62,16 @@ visdat::vis_miss(dfs)
 
 ## 1.1 Literature - *Ludwig et al. 2023*
 
-- Explain the difference between random cross-validation and spatial cross-validation: 
+**Explain the difference between random cross-validation and spatial cross-validation:** 
 
+From Ludwig et al, 2023: 
+Random cross-validation uses randomly split data and only indicates the ability to of the model to make predictions within the splits. Spatial cross-validation however holds back spatial units for validation and assess the ability of model predictions beyond the training data. 
 
 --- 
 
-- alternative to measuring distance for evaluation of spatial upscaling based on environmental covariates:
-Evaluate based on environmental covariates - e.g. statistical distance? 
+**alternative to measuring distance for evaluation of spatial upscaling based on environmental covariates:**
+
+Instead of calculating a dissimilarity index in terms of geographical distance, one could calculate it based on the environmental covariates and therefore determine the prediction skill as the area of applicability based on environmental data.  
 
 ---
 
@@ -80,6 +88,44 @@ Use Random Forest to perform a 5-fold cross-validation with the leaf N data (lea
 
 **Report the mean RMSE and R**
  across cross-validation folds. Chose hyperparameters as mtry = 3 and min.node.size = 12 and others as their default in ranger::ranger().
+```{r Random cross validation}
+#select the predictors we want;
+df_rf <- df |> 
+  dplyr::select(leafN, elv, mat, map, ndep, mai, Species) |> 
+  filter(Species %in% common_species)
+
+# Data splitting
+set.seed(123)  # for reproducibility
+split <- rsample::initial_split(df_rf, prop = 0.7, strata = "leafN")
+ddf_train <- rsample::training(split)
+ddf_test <- rsample::testing(split)
+
+# The same model formulation is in the previous chapter
+pp <- recipes::recipe(leafN ~ elv + mat + map + ndep + mai + Species,
+                      data = ddf_train) |>
+  recipes::step_center(recipes::all_numeric(), -recipes::all_outcomes()) |>
+  recipes::step_scale(recipes::all_numeric(), -recipes::all_outcomes())
+
+mod <- train( #random forest model
+  pp,
+  data = ddf_train %>%
+    drop_na(),
+  method = "ranger",
+  trControl = trainControl(method = "cv", number = 5, savePredictions = "final"),
+  tuneGrid = expand.grid( .mtry = floor(9 / 3),
+                          .min.node.size = 12,
+                          .splitrule = "variance"),
+  metric = "RMSE",
+  replace = FALSE,
+  seed = 1982                # for reproducibility
+)
+
+# return RMSE and Rsquared:
+cat("The Random Forest model was trained with hyperparameters mtry = ", mod$results$mtry, "and min.node.size = ", mod$results$min.node.size, ".", 
+  "\nThe RMSE value is:", mod$results$RMSE,
+    "\nThe Rsquared value is:", mod$results$Rsquared)
+
+```
 
 ---
  
@@ -112,11 +158,53 @@ ggplot() +
   labs(x = "", y = "") +
   theme(legend.position = "bottom")
 ```
-1) Observations: the data is very heterogenously distributed around the globe with a strong bias on central Europe and another cluster of data in eastern Asia. Only a couple of datapoints are recorded for the Americas, Africa and Oceania, which will influence the model outcome. 
+*1) Implications of geographical data distribution:*
 
-2) Spatial cross-validation using k-means (k=5) and plotting it: 
+The data is very heterogenously distributed around the globe with a strong bias on central Europe and another cluster of data in eastern Asia. Only a couple of datapoints are recorded for the Americas, Africa and Oceania. As also mentioned in Ludwig et al., 2023, this will potentially bias the model results with higher accuracy for in regions with data clusters as there might be regions too dissimilar from the training data. In terms of model results, this could lead to spatial overfitting. 
+
+*2) Spatial cross-validation using k-means (k=5) and plotting it:*
+
+```{r Spatial clustering}
+# cluster the data
+clusters <- kmeans(
+  dfs[,2:3],
+  centers = 5
+)
+
+dfs$clusters <- clusters$cluster
+```
+Plotting the spatial clusters: 
+```{r}
+library(RColorBrewer)
+myPalette <- colorRampPalette(rev(brewer.pal(5, "Set1")))
+sc <- scale_colour_gradientn(colours = myPalette(100), limits=c(1, 5))
+ggplot() +
+  # plot coastline
+  geom_sf(data = coast,
+          colour = 'black',
+          size = 0.2) +
+
+  # set extent in longitude and latitude
+  coord_sf(
+    ylim = c(-60, 80),
+    expand = FALSE) +  # to draw map strictly bounded by the specified extent
+  
+  # plot points on map
+  geom_point(data = dfs, aes(x = lon, y = lat, colour = clusters), size = 0.2) +
+  sc+
+  labs(x = "", y = "") +
+  theme(legend.position = "bottom")
+```
+
+
 
 3) Distribution of leafN by cluster plot:
+```{r}
+ggplot()
+#barplot showing distribution of leafN by cluster
+```
+
+
 
 4) Random forest model for the identified clusters:
 
@@ -199,6 +287,15 @@ This is approximate because the k-means clustering contains a random element.
 ## 2.4 Environmental Cross-Validation
 
 1) perform a custom cross-validation as above, but this time considering five clusters of points not in geographical space, but in environmental space - spanned by the mean annual precipitation and the mean annual temperature. Report the R-squared and the RMSE on the validation set of each of the five folds.
+
+```{r}
+# cluster the data
+clusters <- kmeans(
+  dfs[,2:3], #here chose the right parameters, 2:3 is lon lat
+  centers = 5
+)
+```
+
 
 2) Compare the results of the environmental cross-validation to the results of the random and the spatial cross-validation and discuss reasons for why you observe a difference in the cross-validation metrics (if you do).
 
