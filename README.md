@@ -1,4 +1,5 @@
 #Submission folder for AGDSII - Patricia Helpap
+
 This is a project repository for the course `Applied Geodata Science II` at UniBern. 
 Included are two project submissions, namely for `Phenology Modelling` and `Spatial Upscaling`.
 
