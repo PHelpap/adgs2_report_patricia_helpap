@@ -2,7 +2,7 @@
 
 #used in Phenology Modelling:
 #-----------Growing degree day model optimization
-gdd_model <- function(temp, par) { #put the function into the R file for submission
+gdd_model <- function(temp, par) {
   # split out parameters from a simple
   # vector of parameter values
   temp_threshold <- par[1]
@@ -24,7 +24,7 @@ gdd_model <- function(temp, par) { #put the function into the R file for submiss
 #-------Phenology Model Calibration
 # run model and compare to true values
 # returns the RMSE
-rmse_gdd <- function(par, data) { #also put in functions folder for submission
+rmse_gdd <- function(par, data) {
 
   # split out data
   drivers <- data$drivers
