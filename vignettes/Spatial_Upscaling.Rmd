@@ -1,5 +1,5 @@
 ---
-title: "Spatial Upscaling Exercise"
+title: "Submission Spatial Upscaling"
 author: "Patricia Helpap"
 date: "2023-11-30"
 output: html_document

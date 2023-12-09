@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 *The following describes, how the phenology model implemented in Chapter 6 from `A Handful of Pixels` can be optimized using three different methods:*
 
-1) The model could be optimized by using more than one station as input data for the model i.e. improve calibration parameters. This would increase the number of observations that are used to calculate the optimal parameters used in the model and should therefore make predictions more robust.
+1) The model could be optimized by using more than one station as input data for the model i.e. improve calibration parameters. This would increase the number of observations that are used to calculate the optimal parameters used in the model and should therefore make predictions more robust. _This method will be implemented in this report._
 
 2) One could also implement a different parameter opitimization method instead of simulated annealing, such as Bayesian optimization e.g. through `{Bayesian Tools}`.
 
@@ -45,16 +45,17 @@ library(reshape2)
 ```
 
 
-Downloading greenness time series of the original harvard station (+ two further sites that are closest to harvard to enhance *n* and improve the optimization parameters) and calculating phenology (phenophases).
+Downloading greenness time series of the original Harvard station (+ two further sites that are closest to harvard to enhance *n* and improve the optimization parameters) and calculating phenology (phenophases).
 
 The chosen sites are: 
 
 ![Harvard site - original](../images/Harvard_site.png){#id .class width=40% height=40%}
 ![NEON site - additional](../images/NEON_site.png){#id .class width=40% height=40%}
-![harvardbarn2 site - additional](../images/harvardbarn_site.png){#id .class width=40% height=40%}
+![Harvardbarn2 site - additional](../images/harvardbarn_site.png){#id .class width=40% height=40%}
 
+Downloading phenology data for the chosen sites: 
 ```{r download phenocam, message=FALSE}
-phenocamr::download_phenocam( #to improve the model, can include more sites i.e. increase n
+phenocamr::download_phenocam( 
   site = "harvard$",
   veg_type = "DB",
   roi_id = "1000",
@@ -63,7 +64,7 @@ phenocamr::download_phenocam( #to improve the model, can include more sites i.e.
   trim = 2022,
   out_dir = tempdir()
 )
-phenocamr::download_phenocam( #to improve the model, can include more sites i.e. increase n
+phenocamr::download_phenocam( 
   site = "NEON.D01.HARV.DP1.00033$",
   veg_type = "DB",
   roi_id = "1000",
@@ -72,7 +73,7 @@ phenocamr::download_phenocam( #to improve the model, can include more sites i.e.
   trim = 2022,
   out_dir = tempdir()
 )
-phenocamr::download_phenocam( #to improve the model, can include more sites i.e. increase n
+phenocamr::download_phenocam( 
   site = "harvardbarn2$",
   veg_type = "DB",
   roi_id = "1000",
@@ -98,10 +99,8 @@ NEON_phenocam_data <- readr::read_csv(
 ```
 
 
-Reading in harvard phenology, only retaining spring (rising) phenology for the GCC 90th percentile time series (the default):
+Reading in site phenologies, only retaining spring (rising) phenology for the GCC 90th percentile time series (the default):
 ```{r phenology, message=FALSE}
-
-#Reading in harvard phenology only retaining spring (rising) phenology for the GCC 90th percentile time series (the default):
 
 harvard_phenology <- readr::read_csv(
   file.path(
@@ -202,7 +201,8 @@ NEON_temp$ID <- "NEON"
 station_temp <- rbind(harvard_temp, harvardbarn_temp, NEON_temp)
 
 ```
-Convert the harvard phenology data and only retain required data. Also binding all phenology data into one dataframe again.
+
+Convert the Harvard phenology data and only retain required data. Also binding all phenology data into one dataframe again.
 ```{r phenology conversion}
 harvard_phenology <- harvard_phenology |>
   mutate(
@@ -275,7 +275,7 @@ data_harvard <- list(
 )
 
 # optimize the model parameters
-optim_par = GenSA::GenSA(
+optim_par = GenSA::GenSA( #model with additional sites
   par = par,
   fn = rmse_gdd,
   lower = lower,
@@ -324,16 +324,20 @@ predictions <- station_temp |>
 validation <- left_join(predictions, station_phenology)
 validation_ha <- left_join(predictions_ha, harvard_phenology)
 
+#calculate rsquared and rmse for model evaluation
+rsq_AS <- round(summary(lm(validation$prediction ~ validation$doy ))$r.squared,3) # the R-squared determined on the validation set for all sites
+rmse_AS <- round(sqrt(mean((validation$doy - validation$prediction)^2)),3) # the root mean square error on the validation set for all sites
+
+rsq_HA <- round(summary(lm(validation_ha$prediction ~ validation_ha$doy ))$r.squared, 3) # the R-squared determined on the validation set for harvard only
+rmse_HA <- round(sqrt(mean((validation_ha$doy - validation_ha$prediction)^2)), 3) # the root mean square error on the validation set for harvard only
+
 ```
 
 We can now plot the predicted vs observed DOY to see how well the model does compared to the original model:
 ```{r plotting, echo=FALSE, fig.cap = "Fig. 1: Observed DOY vs predicted DOY for the previous model (left) and the optimized model version (right)"}
 
-# join predicted with observed data
-validation <- left_join(predictions, station_phenology)
-validation_ha <- left_join(predictions_ha, harvard_phenology)
 
-plot_allsites <- ggplot(validation) + #trying to combine both plots into one??
+plot_allsites <- ggplot(validation) + 
   geom_smooth(
     aes(
       doy,
@@ -358,6 +362,8 @@ plot_allsites <- ggplot(validation) + #trying to combine both plots into one??
   ) +
   annotate("text", x = 121, y = 138,
            label = paste("With additional sites"), color = "black", size = 4) +
+    annotate("text", x = 120, y = 136,
+           label = paste("Rsqu = ", rsq_AS, "\nRMSE = ", rmse_AS), color = "grey40", size = 4) +
   theme_bw()  +
   theme(legend.position = "none")
 
@@ -385,15 +391,18 @@ plot_harvard <- ggplot(validation_ha) + #for comparing with harvard alone
     x = "Observed leaf-out date (DOY)",
     y = "Predicted leaf-out date (DOY)"
   ) +
-  annotate("text", x = 121, y = 136,
+  annotate("text", x = 121, y = 140,
            label = paste("Harvard site alone"), color = "red3", size = 4) +
+      annotate("text", x = 120, y = 137,
+           label = paste("Rsqu = ", rsq_HA, "\nRMSE = ", rmse_HA), color = "red2", size = 4) +
   theme_bw()  +
   theme(
     legend.position = "none"
   )
 
-ggarrange(plot_harvard, plot_allsites, ncol=2)
+ggarrange(plot_allsites, plot_harvard, ncol=2)
 ```
+At first glance, the addition of sites has not improved the model skill, with a decreased Rsquared value (less predictive skill) and a worse RMSE (worse model fit) compared to Harvard alone. This also becomes apparent visually with a further deviation from the model fit line from the diagonal.
 
 --- 
 
@@ -472,9 +481,6 @@ leaflet() |>
     title = "DOY")
 ```
 
-It becomes apparent quite quickly that including more sites into the model has actually made the predictions worse compared to the observed DOY since the black line deviates even further from the ideal diagonal than the red line (harvard alone).
-
-
 ---
 
 ### Exercise 3 - Statistical comparison with the MODIS MCD12Q2 phenology product
@@ -482,7 +488,6 @@ It becomes apparent quite quickly that including more sites into the model has a
 *the MODIS phenology product is another set of observational data that we compare our model data to*
 
 We first have to download the MODIS data that is appropriate for comparison i.e.
-
 
 _for statistical comparison (averaged spatially):_
 
@@ -584,7 +589,7 @@ For further evaluation, we can also look at the correlation of both datasets. In
 ```{r corr}
 cor_phen <- round(cor(phenology_stats$DOY_modis, phenology_stats$DOY_pred, method = "pearson"),3)
 cor_phen 
-cor_phen^2 #(i.e. R2) 
+cor_phen^2 #(i.e. Rsquared) 
 
 ```
 
@@ -628,10 +633,12 @@ ggarrange(plot1, plot2)
 ```
 
 __To summarise:__
+
 - The Mann-Whitney-U-test shows that the two datasets are significantly different, i.e. we have to accept the alternative Hypothesis.
 
 - The resulting slope and intercept of the linear model show that the predicted values are signficantly higher than the observed MODIS data for this region (visually shown in the boxplot). 
 
+---
 
 For spatial comparison of the two datasets, I will focus on years 2009, 2010 and 2011 to capture the changes around the 'special' year 2010.
 
@@ -912,11 +919,10 @@ __Interpretation of Analysis__
 
 - The Mann-Whitney-U-test shows that the two datasets are significantly different, i.e. we have to reject the null hypothesis. The resulting slope and intercept of the linear model show that the predicted values are significantly higher than the observed MODIS data for this region (Fig. 3). Correlation of both datasets is not as high as expected with 0.725; ideally, we would want a value much closer to 1. The R^2 value of 0.53 means that the predicted values can only explain 53% of the observed values.
 
-- Spatial comparison again highlights that predicted DOY values are overall higher than the observed MODIS DOY values. Spatial patterns are generally very similar in both MODIS and model data, with gradient higher DOY values towards the north-west and lower DOYs towards the south-east corner. The clear gradient is much more pronounced in the predicted values compared to the MODIS data. The difference can be explained by the relatively poor match of model to observational data as explained above. Since the additional input data is also quite centered around Harvard, the spatial scaling could suffer from a spatial bias towards that region and therefore produce less good results during scaling. 
+- Spatial comparison again highlights that predicted DOY values are overall higher than the observed MODIS DOY values. Spatial patterns are generally very similar in both MODIS and model data, with a  gradient of higher DOY values towards the north-west and lower DOYs towards the south-east corner. The clear gradient is much more pronounced in the predicted values compared to the MODIS data. The difference can be explained by the relatively poor match of model to observational data as explained above. Since the additional input data is also quite centered around Harvard, the spatial scaling could suffer from a spatial bias towards that region and therefore produce less good results during scaling. 
 
 - The side-by-side comparison of DOY values over 3 years in Fig. 4 highlights the 'special' year 2010: A particularly strong DOY gradient as described before emerges in 2010 with higher than usual values in the north-west and lower than usual values in the rest of the cropped area. The later greening days in the north-east are due different in climatology as mountainous regions are located in that region, hence exhibiting overall cooler temperatures than at lower elevations. The 'special' year values could therefore also be related to a change in climatology, causing later emergence days in the north-east and earlier ones in lower elevation areas.
 
-- Correlation of both datasets is not as high as expected with 0.725; ideally, we would want a value much closer to 1. The R2 value of 0.53 means that the predicted values can only explain 53% of the observed values instead of 100%.
 
 
 
