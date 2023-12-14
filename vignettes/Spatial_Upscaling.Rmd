@@ -48,13 +48,6 @@ dfs <- df |>
   # group_by(lon, lat) |> 
   # summarise(across(where(is.numeric), mean))
 
-# quick overview of data
-skimr::skim(dfs)
-```
-Show missing data: 
-```{r showing missing data}
-# show missing data
-visdat::vis_miss(dfs)
 ```
 
 
@@ -177,7 +170,7 @@ dfs$clusters <- as.factor(clusters$cluster)
 ```
 
 The calculated clusters can be visualised in a plot: 
-```{r Spatial Cluster plot, echo=FALSE, fig.cap = "Fig. 2: Global spatial distribution of environmental data by clusters."}
+```{r Spatial Cluster plot, echo=FALSE, warning=FALSE, fig.cap = "Fig. 2: Global spatial distribution of environmental data by clusters."}
 
 ggplot() +
   # plot coastline
@@ -200,7 +193,7 @@ ggplot() +
 
 
 __3) Now, we want to visualise the distribution of 'leafN' by cluster:__
-```{r leafN distribution plot, echo=FALSE, message=FALSE, fig.cap = "Fig. 3: Distribution of leafN data by spatial cluster."}
+```{r leafN distribution plot, echo=FALSE, warning=FALSE, message=FALSE, fig.cap = "Fig. 3: Distribution of leafN data by spatial cluster."}
 
 cols <- c("red", "blue", "green", "yellow", "violet")
 
@@ -319,7 +312,7 @@ dfs$env.clusters <- as.factor(env.clusters$cluster)
 
 
 **Plot the distribution of the clusters: **
-```{r Environmental Spatial Cluster plot, echo=FALSE, fig.cap = "Fig. 4: Global spatial distribution of environmental data by clusters."}
+```{r Environmental Spatial Cluster plot, echo=FALSE, warning=FALSE, fig.cap = "Fig. 4: Global spatial distribution of environmental data by clusters."}
 
 ggplot() +
   # plot coastline
@@ -339,7 +332,7 @@ ggplot() +
   theme(legend.position = "bottom", legend.key.size = unit(1, 'cm'))
 ```
 **The distribution of leafN by environmental clusters visualised:**
-```{r distribution env data, echo=FALSE, fig.cap = "Fig. 5: Distribution of leafN data by environmental cluster."}
+```{r distribution env data, echo=FALSE, warning=FALSE, fig.cap = "Fig. 5: Distribution of leafN data by environmental cluster."}
 
 cols2 <- c("red3", "skyblue", "lightgreen", "gold", "purple")
 
