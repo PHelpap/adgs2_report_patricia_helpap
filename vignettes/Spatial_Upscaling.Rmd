@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Setup: 
-```{r reading data, message=FALSE}
+```{r reading data, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(ggplot2)
 library(lattice)
@@ -66,7 +66,7 @@ Random cross-validation uses randomly split data and only indicates the ability 
 
 **_Alternative to measuring distance for evaluation of spatial upscaling based on environmental covariates:_**
 
-Instead of calculating a dissimilarity index in terms of geographical distance, one could calculate it based on the environmental covariates and therefore determine the prediction skill as the area of applicability based on environmental data.  
+Instead of calculating a dissimilarity index in terms of geographical distance, one could calculate it based on the environmental features and therefore determine the prediction skill as the area of applicability based on environmental data. The Area of Applicability would therefore be referring to feature space rather than geographical space. This could be a more sensible measure for evaluating spatial upscaling, as modeled environmental parameters such as leaf nitrogen are highly dependent on environmental conditions, not just geographical location.  
 
 ---
 
@@ -126,7 +126,7 @@ cat("The Random Forest model was trained with hyperparameters mtry = ", mod$resu
 ## 1.3 Spatial cross-validation
 
 We first want to look at the spatial distribution of the data: 
-```{r spatial data plot, echo=FALSE, fig.cap = "Fig. 1: Global spatial distribution of environmental data."}
+```{r spatial data plot, echo=FALSE, message=FALSE, warning=FALSE, fig.cap = "Fig. 1: Global spatial distribution of environmental data."}
 library(ggplot2)
 library(sf)
 library(rnaturalearth)
@@ -287,7 +287,7 @@ The performance of the two cross-validation methods (random & spatial) implement
 
 From the **random cross validation** we get results of *RMSE = 2.368301, Rsquared = 0.7849508*. 
 
-The **spatial cross validation** gives us 5 different results from the 5 folds / clusters used. overall, the Rsqared does not exceed 0.553 and the RMSE ranges from 2.249 to 11.066 (see output table above). Differences in Rsquared and RSME are due to differences in the spatial clusters but also due to the frequency of observations in the folds. The histogram in Fig. 3 shows that the frequency of observations is very low in folds 3 and 5, which would also explain the low Rsquared for those folds. Low Rsquared values suggest model overfitting and poor model generalizability *(Ludwig et al., 2023)*. 
+The **spatial cross validation** gives us 5 different results from the 5 folds / clusters used. Overall, the Rsqared values are lower than for Random CV and the RMSE is higher (see output table above). Differences in Rsquared and RSME are due to differences in the spatial clusters but also due to the frequency of observations in the folds. The histogram in Fig. 3 shows that the frequency of observations differs from fold to fold, which would also explains some variability in the Rsquared values. Low Rsquared values suggest model overfitting and poor model generalizability *(Ludwig et al., 2023)*. 
 
 The random cross validation therefore generates a better model than the spatial cross validation, with a higher Rsquared and lower RMSE value overall. As we saw in Fig. 1, the data is very strongly spatially biased. This spatial data-gap in predictors will therefore lead to weaker spatial predictions where no reference data is available. 
 Since spatial cross-validation tests the ability of the model to predict unknown geographic locations whereas random cross-validation only indicates the ability of the model to make prediction within the cluster *(Ludwig et al., 2023)*, the random forest model naturally outperforms spatial cross validation here as the data is strongly spatially biased. 
